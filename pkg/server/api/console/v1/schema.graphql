@@ -1074,6 +1074,10 @@ enum DocumentType
     REPORT @goEnum(value: "go.probo.inc/probo/pkg/coredata.DocumentTypeReport")
     TEMPLATE
         @goEnum(value: "go.probo.inc/probo/pkg/coredata.DocumentTypeTemplate")
+    STATEMENT_OF_APPLICABILITY
+        @goEnum(
+            value: "go.probo.inc/probo/pkg/coredata.DocumentTypeStatementOfApplicability"
+        )
 }
 
 enum DocumentClassification
@@ -1672,6 +1676,7 @@ input DocumentFilter {
     query: String
     documentTypes: [DocumentType!]
     classifications: [DocumentClassification!]
+    contentSources: [DocumentVersionContentSource!]
     status: [DocumentStatus!]
 }
 
@@ -2764,8 +2769,9 @@ type StatementOfApplicability implements Node {
     name: String!
     sourceId: ID
     snapshotId: ID
+    document: Document @goField(forceResolver: true)
     organization: Organization @goField(forceResolver: true)
-    owner: Profile! @goField(forceResolver: true)
+    defaultApprovers: [Profile!]! @goField(forceResolver: true)
     createdAt: Datetime!
     updatedAt: Datetime!
 
@@ -3922,6 +3928,9 @@ type Mutation {
     exportStatementOfApplicabilityPDF(
         input: ExportStatementOfApplicabilityPDFInput!
     ): ExportStatementOfApplicabilityPDFPayload!
+    createStatementOfApplicabilityDocument(
+        input: CreateStatementOfApplicabilityDocumentInput!
+    ): CreateStatementOfApplicabilityDocumentPayload!
     publishMajorDocumentVersion(
         input: PublishMajorDocumentVersionInput!
     ): PublishDocumentVersionPayload!
@@ -4738,13 +4747,13 @@ input DeleteMeetingInput {
 input CreateStatementOfApplicabilityInput {
     organizationId: ID!
     name: String!
-    ownerId: ID!
+    defaultApproverIds: [ID!]
 }
 
 input UpdateStatementOfApplicabilityInput {
     id: ID!
     name: String
-    ownerId: ID
+    defaultApproverIds: [ID!]
 }
 
 input ApplicabilityStatementInput {
@@ -4763,6 +4772,16 @@ input ExportStatementOfApplicabilityPDFInput {
 
 type ExportStatementOfApplicabilityPDFPayload {
     data: String!
+}
+
+input CreateStatementOfApplicabilityDocumentInput {
+    statementOfApplicabilityId: ID!
+    approverIds: [ID!]
+}
+
+type CreateStatementOfApplicabilityDocumentPayload {
+    documentEdge: DocumentEdge!
+    documentVersionEdge: DocumentVersionEdge!
 }
 
 input StatementOfApplicabilityOrder
@@ -5598,11 +5617,41 @@ type DocumentVersion implements Node {
 
     signed: Boolean! @goField(forceResolver: true)
 
+    orientation: DocumentVersionOrientation
+    contentSource: DocumentVersionContentSource!
     publishedAt: Datetime
     createdAt: Datetime!
     updatedAt: Datetime!
 
     permission(action: String!): Boolean! @goField(forceResolver: true)
+}
+
+enum DocumentVersionOrientation
+    @goModel(
+        model: "go.probo.inc/probo/pkg/coredata.DocumentVersionOrientation"
+    ) {
+    PORTRAIT
+        @goEnum(
+            value: "go.probo.inc/probo/pkg/coredata.DocumentVersionOrientationPortrait"
+        )
+    LANDSCAPE
+        @goEnum(
+            value: "go.probo.inc/probo/pkg/coredata.DocumentVersionOrientationLandscape"
+        )
+}
+
+enum DocumentVersionContentSource
+    @goModel(
+        model: "go.probo.inc/probo/pkg/coredata.DocumentVersionContentSource"
+    ) {
+    AUTHORED
+        @goEnum(
+            value: "go.probo.inc/probo/pkg/coredata.DocumentVersionContentSourceAuthored"
+        )
+    GENERATED
+        @goEnum(
+            value: "go.probo.inc/probo/pkg/coredata.DocumentVersionContentSourceGenerated"
+        )
 }
 
 type DocumentVersionSignatureConnection
@@ -6388,6 +6437,10 @@ enum ElectronicSignatureDocumentType
     PRIVACY_POLICY
         @goEnum(
             value: "go.probo.inc/probo/pkg/coredata.ElectronicSignatureDocumentTypePrivacyPolicy"
+        )
+    STATEMENT_OF_APPLICABILITY
+        @goEnum(
+            value: "go.probo.inc/probo/pkg/coredata.ElectronicSignatureDocumentTypeStatementOfApplicability"
         )
     OTHER
         @goEnum(

@@ -83,6 +83,8 @@ func NewDocumentVersion(documentVersion *coredata.DocumentVersion) *DocumentVers
 		Status:         documentVersion.Status,
 		Classification: documentVersion.Classification,
 		DocumentType:   documentVersion.DocumentType,
+		Orientation:    documentVersion.Orientation,
+		ContentSource:  documentVersion.ContentSource,
 		PublishedAt:    documentVersion.PublishedAt,
 		Changelog:      documentVersion.Changelog,
 		CreatedAt:      documentVersion.CreatedAt,

@@ -74,6 +74,9 @@ type (
 	ErrDocumentNotArchived struct {
 	}
 
+	ErrDocumentVersionGenerated struct {
+	}
+
 	ErrDocumentVersionSignatureAlreadySigned struct {
 	}
 
@@ -216,6 +219,10 @@ func (e ErrDocumentArchived) Error() string {
 
 func (e ErrDocumentNotArchived) Error() string {
 	return "cannot unarchive a document that is not archived"
+}
+
+func (e ErrDocumentVersionGenerated) Error() string {
+	return "cannot edit a generated document version"
 }
 
 func (e ErrDocumentVersionSignatureAlreadySigned) Error() string {
@@ -852,6 +859,10 @@ func (s *DocumentService) UpdateVersion(
 
 			if documentVersion.Status != coredata.DocumentVersionStatusDraft {
 				return &ErrDocumentVersionNotDraft{}
+			}
+
+			if documentVersion.ContentSource == coredata.DocumentVersionContentSourceGenerated {
+				return &ErrDocumentVersionGenerated{}
 			}
 
 			if req.Content != nil {
@@ -2141,6 +2152,8 @@ func exportDocumentPDF(
 		}
 	}
 
+	isLandscape := version.Orientation != nil && *version.Orientation == coredata.DocumentVersionOrientationLandscape
+
 	docData := docgen.DocumentData{
 		Title:                       version.Title,
 		Content:                     json.RawMessage([]byte(version.Content)),
@@ -2151,6 +2164,7 @@ func exportDocumentPDF(
 		PublishedAt:                 version.PublishedAt,
 		Signatures:                  signatureData,
 		CompanyHorizontalLogoBase64: horizontalLogoBase64,
+		Landscape:                   isLandscape,
 	}
 
 	htmlContent, err := docgen.RenderHTML(docData)
@@ -2158,16 +2172,24 @@ func exportDocumentPDF(
 		return nil, fmt.Errorf("cannot generate HTML: %w", err)
 	}
 
+	orientation := html2pdf.OrientationPortrait
+	if isLandscape {
+		orientation = html2pdf.OrientationLandscape
+	}
+
 	cfg := html2pdf.RenderConfig{
-		PageFormat:        html2pdf.PageFormatA4,
-		Orientation:       html2pdf.OrientationPortrait,
-		MarginTop:         html2pdf.NewMarginInches(1.0),
-		MarginBottom:      html2pdf.NewMarginInches(1.0),
-		MarginLeft:        html2pdf.NewMarginInches(1.0),
-		MarginRight:       html2pdf.NewMarginInches(1.0),
-		PrintBackground:   true,
-		Scale:             1.0,
-		WaitForExpression: "window.__mermaidReady === true",
+		PageFormat:      html2pdf.PageFormatA4,
+		Orientation:     orientation,
+		MarginTop:       html2pdf.NewMarginInches(1.0),
+		MarginBottom:    html2pdf.NewMarginInches(1.0),
+		MarginLeft:      html2pdf.NewMarginInches(1.0),
+		MarginRight:     html2pdf.NewMarginInches(1.0),
+		PrintBackground: true,
+		Scale:           1.0,
+	}
+
+	if version.DocumentType != coredata.DocumentTypeStatementOfApplicability {
+		cfg.WaitForExpression = "window.__mermaidReady === true"
 	}
 
 	pdfReader, err := html2pdfConverter.GeneratePDF(ctx, htmlContent, cfg)

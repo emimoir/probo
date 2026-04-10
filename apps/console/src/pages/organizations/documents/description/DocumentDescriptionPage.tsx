@@ -34,6 +34,7 @@ export const documentDescriptionPageQuery = graphql`
         id
         content
         status
+        contentSource
       }
     }
     document: node(id: $documentId) {
@@ -46,6 +47,7 @@ export const documentDescriptionPageQuery = graphql`
               id
               content
               status
+              contentSource
             }
           }
         }
@@ -125,7 +127,7 @@ export function DocumentDescriptionPage(props: { queryRef: PreloadedQuery<Docume
       className="flex-1"
       content={currentVersion.content}
       data-theme="document"
-      disabled={currentVersion.status !== "DRAFT"}
+      disabled={currentVersion.status !== "DRAFT" || currentVersion.contentSource === "GENERATED"}
       onChangeContent={handleUpdate}
     />
   );

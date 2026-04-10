@@ -205,6 +205,7 @@ type (
 		Signatures                  []SignatureData
 		CompanyHorizontalLogoBase64 string
 		MermaidJS                   template.JS
+		Landscape                   bool
 	}
 
 	SignatureData struct {

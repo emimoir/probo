@@ -33,9 +33,9 @@ type (
 		ID             gid.GID   `db:"id"`
 		OrganizationID gid.GID   `db:"organization_id"`
 		Name           string    `db:"name"`
-		SourceID       *gid.GID  `db:"source_id"`
-		SnapshotID     *gid.GID  `db:"snapshot_id"`
-		OwnerID        gid.GID   `db:"owner_profile_id"`
+		SourceID   *gid.GID  `db:"source_id"`
+		SnapshotID *gid.GID  `db:"snapshot_id"`
+		DocumentID *gid.GID  `db:"document_id"`
 		CreatedAt      time.Time `db:"created_at"`
 		UpdatedAt      time.Time `db:"updated_at"`
 	}
@@ -81,7 +81,7 @@ SELECT
     name,
     source_id,
     snapshot_id,
-    owner_profile_id,
+    document_id,
     created_at,
     updated_at
 FROM
@@ -130,7 +130,7 @@ SELECT
     name,
     source_id,
     snapshot_id,
-    owner_profile_id,
+    document_id,
     created_at,
     updated_at
 FROM
@@ -210,7 +210,7 @@ INSERT INTO
         name,
         source_id,
         snapshot_id,
-        owner_profile_id,
+        document_id,
         created_at,
         updated_at
     )
@@ -221,7 +221,7 @@ VALUES (
     @name,
     @source_id,
     @snapshot_id,
-    @owner_profile_id,
+    @document_id,
     @created_at,
     @updated_at
 );
@@ -234,7 +234,7 @@ VALUES (
 		"name":                          s.Name,
 		"source_id":                     s.SourceID,
 		"snapshot_id":                   s.SnapshotID,
-		"owner_profile_id":              s.OwnerID,
+		"document_id":                   s.DocumentID,
 		"created_at":                    s.CreatedAt,
 		"updated_at":                    s.UpdatedAt,
 	}
@@ -262,7 +262,7 @@ func (s *StatementOfApplicability) Update(
 UPDATE statements_of_applicability
 SET
     name = @name,
-    owner_profile_id = @owner_profile_id,
+    document_id = @document_id,
     updated_at = @updated_at
 WHERE
     %s
@@ -274,7 +274,7 @@ WHERE
 	args := pgx.StrictNamedArgs{
 		"statement_of_applicability_id": s.ID,
 		"name":                          s.Name,
-		"owner_profile_id":              s.OwnerID,
+		"document_id":                   s.DocumentID,
 		"updated_at":                    s.UpdatedAt,
 	}
 	maps.Copy(args, scope.SQLArguments())
@@ -354,7 +354,6 @@ INSERT INTO statements_of_applicability (
     name,
     source_id,
     snapshot_id,
-    owner_profile_id,
     created_at,
     updated_at
 )
@@ -365,7 +364,6 @@ SELECT
     soa.name,
     soa.id,
     @snapshot_id,
-    soa.owner_profile_id,
     soa.created_at,
     soa.updated_at
 FROM statements_of_applicability soa

@@ -1132,7 +1132,8 @@ func (r *controlResolver) Documents(ctx context.Context, obj *types.Control, fir
 	if filter != nil {
 		documentFilter = coredata.NewDocumentFilter(filter.Query).
 			WithDocumentTypes(filter.DocumentTypes).
-			WithClassifications(filter.Classifications)
+			WithClassifications(filter.Classifications).
+			WithContentSources(filter.ContentSources)
 	}
 
 	page, err := prb.Documents.ListForControlID(ctx, obj.ID, cursor, documentFilter)
@@ -2876,7 +2877,8 @@ func (r *measureResolver) Documents(ctx context.Context, obj *types.Measure, fir
 	if filter != nil {
 		documentFilter = coredata.NewDocumentFilter(filter.Query).
 			WithDocumentTypes(filter.DocumentTypes).
-			WithClassifications(filter.Classifications)
+			WithClassifications(filter.Classifications).
+			WithContentSources(filter.ContentSources)
 	}
 
 	pg, err := prb.Documents.ListForMeasureID(ctx, obj.ID, cursor, documentFilter)
@@ -5565,9 +5567,9 @@ func (r *mutationResolver) CreateStatementOfApplicability(ctx context.Context, i
 	statementOfApplicability, err := prb.StatementsOfApplicability.Create(
 		ctx,
 		probo.CreateStatementOfApplicabilityRequest{
-			OrganizationID: input.OrganizationID,
-			Name:           input.Name,
-			OwnerID:        input.OwnerID,
+			OrganizationID:     input.OrganizationID,
+			Name:               input.Name,
+			DefaultApproverIDs: input.DefaultApproverIds,
 		},
 	)
 	if err != nil {
@@ -5599,12 +5601,17 @@ func (r *mutationResolver) UpdateStatementOfApplicability(ctx context.Context, i
 		name = input.Name
 	}
 
+	var defaultApproverIDs *[]gid.GID
+	if input.DefaultApproverIds != nil {
+		defaultApproverIDs = &input.DefaultApproverIds
+	}
+
 	statementOfApplicability, err := prb.StatementsOfApplicability.Update(
 		ctx,
 		probo.UpdateStatementOfApplicabilityRequest{
 			StatementOfApplicabilityID: input.ID,
 			Name:                       name,
-			OwnerID:                    input.OwnerID,
+			DefaultApproverIDs:         defaultApproverIDs,
 		},
 	)
 	if err != nil {
@@ -5661,6 +5668,26 @@ func (r *mutationResolver) ExportStatementOfApplicabilityPDF(ctx context.Context
 
 	return &types.ExportStatementOfApplicabilityPDFPayload{
 		Data: dataURI,
+	}, nil
+}
+
+// CreateStatementOfApplicabilityDocument is the resolver for the createStatementOfApplicabilityDocument field.
+func (r *mutationResolver) CreateStatementOfApplicabilityDocument(ctx context.Context, input types.CreateStatementOfApplicabilityDocumentInput) (*types.CreateStatementOfApplicabilityDocumentPayload, error) {
+	if err := r.authorize(ctx, input.StatementOfApplicabilityID, probo.ActionStatementOfApplicabilityExport); err != nil {
+		return nil, err
+	}
+
+	prb := r.ProboService(ctx, input.StatementOfApplicabilityID.TenantID())
+
+	document, documentVersion, err := prb.StatementsOfApplicability.CreateDocument(ctx, input.StatementOfApplicabilityID, input.ApproverIds)
+	if err != nil {
+		r.logger.ErrorCtx(ctx, "cannot create statement of applicability document", log.Error(err))
+		return nil, gqlutils.Internal(ctx)
+	}
+
+	return &types.CreateStatementOfApplicabilityDocumentPayload{
+		DocumentEdge:        types.NewDocumentEdge(document, coredata.DocumentOrderFieldCreatedAt),
+		DocumentVersionEdge: types.NewDocumentVersionEdge(documentVersion, coredata.DocumentVersionOrderFieldCreatedAt),
 	}, nil
 }
 
@@ -6117,6 +6144,9 @@ func (r *mutationResolver) UpdateDocumentVersion(ctx context.Context, input type
 
 		if errArchived, ok := errors.AsType[*probo.ErrDocumentArchived](err); ok {
 			return nil, gqlutils.Conflict(ctx, errArchived)
+		}
+		if errGenerated, ok := errors.AsType[*probo.ErrDocumentVersionGenerated](err); ok {
+			return nil, gqlutils.Conflict(ctx, errGenerated)
 		}
 		if validationErrors, ok := errors.AsType[validator.ValidationErrors](err); ok {
 			return nil, gqlutils.InvalidValidationErrors(ctx, validationErrors)
@@ -8534,6 +8564,7 @@ func (r *organizationResolver) Documents(ctx context.Context, obj *types.Organiz
 		documentFilter = coredata.NewDocumentFilter(filter.Query).
 			WithDocumentTypes(filter.DocumentTypes).
 			WithClassifications(filter.Classifications).
+			WithContentSources(filter.ContentSources).
 			WithStatus(filter.Status)
 	}
 
@@ -10035,7 +10066,8 @@ func (r *riskResolver) Documents(ctx context.Context, obj *types.Risk, first *in
 	if filter != nil {
 		documentFilter = coredata.NewDocumentFilter(filter.Query).
 			WithDocumentTypes(filter.DocumentTypes).
-			WithClassifications(filter.Classifications)
+			WithClassifications(filter.Classifications).
+			WithContentSources(filter.ContentSources)
 	}
 
 	page, err := prb.Documents.ListForRiskID(ctx, obj.ID, cursor, documentFilter)
@@ -10244,6 +10276,30 @@ func (r *snapshotConnectionResolver) TotalCount(ctx context.Context, obj *types.
 	return 0, gqlutils.Internal(ctx)
 }
 
+// Document is the resolver for the document field.
+func (r *statementOfApplicabilityResolver) Document(ctx context.Context, obj *types.StatementOfApplicability) (*types.Document, error) {
+	if obj.Document == nil {
+		return nil, nil
+	}
+
+	if err := r.authorize(ctx, obj.ID, probo.ActionDocumentGet); err != nil {
+		return nil, err
+	}
+
+	loaders := dataloader.FromContext(ctx)
+
+	document, err := loaders.Document.Load(ctx, obj.Document.ID)
+	if err != nil {
+		if errors.Is(err, coredata.ErrResourceNotFound) || errors.Is(err, dataloadgen.ErrNotFound) {
+			return nil, nil
+		}
+		r.logger.ErrorCtx(ctx, "cannot load document", log.Error(err))
+		return nil, gqlutils.Internal(ctx)
+	}
+
+	return types.NewDocument(document), nil
+}
+
 // Organization is the resolver for the organization field.
 func (r *statementOfApplicabilityResolver) Organization(ctx context.Context, obj *types.StatementOfApplicability) (*types.Organization, error) {
 	if err := r.authorize(ctx, obj.ID, probo.ActionOrganizationGet); err != nil {
@@ -10264,24 +10320,26 @@ func (r *statementOfApplicabilityResolver) Organization(ctx context.Context, obj
 	return types.NewOrganization(organization), nil
 }
 
-// Owner is the resolver for the owner field.
-func (r *statementOfApplicabilityResolver) Owner(ctx context.Context, obj *types.StatementOfApplicability) (*types.Profile, error) {
-	if err := r.authorize(ctx, obj.ID, iam.ActionMembershipProfileGet); err != nil {
+// DefaultApprovers is the resolver for the defaultApprovers field.
+func (r *statementOfApplicabilityResolver) DefaultApprovers(ctx context.Context, obj *types.StatementOfApplicability) ([]*types.Profile, error) {
+	if err := r.authorize(ctx, obj.ID, probo.ActionStatementOfApplicabilityGet); err != nil {
 		return nil, err
 	}
 
-	loaders := dataloader.FromContext(ctx)
+	prb := r.ProboService(ctx, obj.ID.TenantID())
 
-	owner, err := loaders.Profile.Load(ctx, obj.Owner.ID)
+	profiles, err := prb.StatementsOfApplicability.GetDefaultApprovers(ctx, obj.ID)
 	if err != nil {
-		if errors.Is(err, coredata.ErrResourceNotFound) || errors.Is(err, dataloadgen.ErrNotFound) {
-			return nil, gqlutils.NotFound(ctx, err)
-		}
-		r.logger.ErrorCtx(ctx, "cannot load owner", log.Error(err))
+		r.logger.ErrorCtx(ctx, "cannot get default approvers", log.Error(err))
 		return nil, gqlutils.Internal(ctx)
 	}
 
-	return types.NewProfile(owner), nil
+	result := make([]*types.Profile, len(profiles))
+	for i, p := range profiles {
+		result[i] = types.NewProfile(p)
+	}
+
+	return result, nil
 }
 
 // ApplicabilityStatements is the resolver for the applicabilityStatements field.

@@ -2898,9 +2898,9 @@ func (r *Resolver) AddStatementOfApplicabilityTool(ctx context.Context, req *mcp
 	svc := r.ProboService(ctx, input.OrganizationID)
 
 	soa, err := svc.StatementsOfApplicability.Create(ctx, probo.CreateStatementOfApplicabilityRequest{
-		OrganizationID: input.OrganizationID,
-		Name:           input.Name,
-		OwnerID:        input.OwnerID,
+		OrganizationID:     input.OrganizationID,
+		Name:               input.Name,
+		DefaultApproverIDs: input.DefaultApproverIds,
 	})
 	if err != nil {
 		return nil, types.AddStatementOfApplicabilityOutput{}, fmt.Errorf("failed to create statement of applicability: %w", err)
@@ -2916,10 +2916,15 @@ func (r *Resolver) UpdateStatementOfApplicabilityTool(ctx context.Context, req *
 
 	svc := r.ProboService(ctx, input.ID)
 
+	var defaultApproverIDs *[]gid.GID
+	if input.DefaultApproverIds != nil {
+		defaultApproverIDs = &input.DefaultApproverIds
+	}
+
 	soa, err := svc.StatementsOfApplicability.Update(ctx, probo.UpdateStatementOfApplicabilityRequest{
 		StatementOfApplicabilityID: input.ID,
 		Name:                       input.Name,
-		OwnerID:                    input.OwnerID,
+		DefaultApproverIDs:         defaultApproverIDs,
 	})
 	if err != nil {
 		return nil, types.UpdateStatementOfApplicabilityOutput{}, fmt.Errorf("failed to update statement of applicability: %w", err)
@@ -3948,5 +3953,21 @@ func (r *Resolver) VoidDocumentVersionApprovalTool(ctx context.Context, req *mcp
 
 	return nil, types.VoidDocumentVersionApprovalOutput{
 		DocumentVersion: types.NewDocumentVersion(documentVersion),
+	}, nil
+}
+
+func (r *Resolver) CreateStatementOfApplicabilityDocumentTool(ctx context.Context, req *mcp.CallToolRequest, input *types.CreateStatementOfApplicabilityDocumentInput) (*mcp.CallToolResult, types.CreateStatementOfApplicabilityDocumentOutput, error) {
+	r.MustAuthorize(ctx, input.ID, probo.ActionStatementOfApplicabilityExport)
+
+	svc := r.ProboService(ctx, input.ID)
+
+	document, documentVersion, err := svc.StatementsOfApplicability.CreateDocument(ctx, input.ID, nil)
+	if err != nil {
+		return nil, types.CreateStatementOfApplicabilityDocumentOutput{}, fmt.Errorf("cannot create statement of applicability document: %w", err)
+	}
+
+	return nil, types.CreateStatementOfApplicabilityDocumentOutput{
+		DocumentID:        document.ID,
+		DocumentVersionID: documentVersion.ID,
 	}, nil
 }

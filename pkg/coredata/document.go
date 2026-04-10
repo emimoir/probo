@@ -257,6 +257,69 @@ WHERE
 	return nil
 }
 
+func (p *Document) LoadByOrganizationIDAndDocumentType(
+	ctx context.Context,
+	conn pg.Querier,
+	scope Scoper,
+	organizationID gid.GID,
+	documentType DocumentType,
+) error {
+	q := `
+WITH latest_versions AS (
+    SELECT DISTINCT ON (document_id) document_id, title, document_type
+    FROM document_versions
+    ORDER BY document_id, major DESC, minor DESC
+)
+SELECT
+    documents.id,
+    documents.organization_id,
+    documents.current_published_major,
+    documents.current_published_minor,
+    documents.trust_center_visibility,
+    documents.status,
+    documents.archived_at,
+    documents.created_at,
+    documents.updated_at,
+    COALESCE(lv.title, '') AS title,
+    COALESCE(lv.document_type, 'OTHER') AS document_type
+FROM
+    documents
+LEFT JOIN latest_versions lv ON lv.document_id = documents.id
+WHERE
+    %s
+    AND documents.deleted_at IS NULL
+    AND documents.organization_id = @organization_id
+    AND lv.document_type = @document_type
+LIMIT 1;
+`
+
+	q = fmt.Sprintf(q, scope.SQLFragment())
+
+	args := pgx.StrictNamedArgs{
+		"organization_id": organizationID,
+		"document_type":   documentType,
+	}
+	maps.Copy(args, scope.SQLArguments())
+
+	rows, err := conn.Query(ctx, q, args)
+	if err != nil {
+		return fmt.Errorf("cannot query documents: %w", err)
+	}
+
+	document, err := pgx.CollectExactlyOneRow(rows, pgx.RowToStructByName[Document])
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ErrResourceNotFound
+		}
+
+		return fmt.Errorf("cannot collect document: %w", err)
+	}
+
+	*p = document
+
+	return nil
+}
+
 func (p *Documents) CountByOrganizationID(
 	ctx context.Context,
 	conn pg.Querier,

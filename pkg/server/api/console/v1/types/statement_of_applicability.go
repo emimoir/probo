@@ -64,13 +64,10 @@ func NewStatementOfApplicabilityEdge(soa *coredata.StatementOfApplicability, ord
 }
 
 func NewStatementOfApplicability(soa *coredata.StatementOfApplicability) *StatementOfApplicability {
-	return &StatementOfApplicability{
+	s := &StatementOfApplicability{
 		ID: soa.ID,
 		Organization: &Organization{
 			ID: soa.OrganizationID,
-		},
-		Owner: &Profile{
-			ID: soa.OwnerID,
 		},
 		Name:       soa.Name,
 		SourceID:   soa.SourceID,
@@ -78,4 +75,12 @@ func NewStatementOfApplicability(soa *coredata.StatementOfApplicability) *Statem
 		CreatedAt:  soa.CreatedAt,
 		UpdatedAt:  soa.UpdatedAt,
 	}
+
+	if soa.DocumentID != nil {
+		s.Document = &Document{
+			ID: *soa.DocumentID,
+		}
+	}
+
+	return s
 }
